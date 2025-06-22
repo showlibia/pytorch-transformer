@@ -63,8 +63,7 @@ class FeedForwardBlock(nn.Module):
     def forward(self, x):
         # (Batch, Seq_len, d_model) --> (Batch, seq_len, d_ff) --> (Batch, Seq_len, d_model)
         # FFN = max(0, xW_1)W_2
-        # FFN = gelu(xW_1)W_2
-        return self.linear_2(self.dropout(nn.GELU(self.linear_1(x))))
+        return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
 
 class MultiHeadAttentionBlock(nn.Module):
     def __init__(self, d_model: int, h: int, dropout: float) -> None:
