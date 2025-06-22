@@ -13,9 +13,9 @@ from tokenizers.pre_tokenizers import Whitespace
 from tqdm import tqdm
 import warnings
 
-from config import get_config, get_weigths_file_path
-from dataset import BilingualDataset, causal_mask
-from model import build_model
+from translate.config import get_config, get_weights_file_path
+from translate.dataset import BilingualDataset, causal_mask
+from translate.model import build_model
 from torch.utils.tensorboard import SummaryWriter
 
 def greedy_decode(model, src, src_mask, tokenizer_src, tokenizer_tgt, max_len, device):
@@ -34,14 +34,14 @@ def greedy_decode(model, src, src_mask, tokenizer_src, tokenizer_tgt, max_len, d
 
         # calculate output
         out = model.decode(encoder_output, src_mask, decoder_input, decoder_mask)
-
+        
         # get next token
         prob = model.project(out[:, -1])
         _, next_word = torch.max(prob, dim=1)
         decoder_input = torch.cat(
             [
                 decoder_input,
-                torch.empty(1, 1).type_as(src).fill_(next_word.item()).to(device),
+                torch.empty(1, 1).fill_(next_word.item()).type_as(src).to(device),
             ],
             dim=1,
         )
@@ -109,7 +109,7 @@ def get_tokenizer(config, ds, lang):
 def get_ds(config):
     ds_raw = load_dataset("Helsinki-NLP/un_ga", f'{config["lang_src"]}_to_{config["lang_tgt"]}', split='train')
     # Only keep 1/2 of the dataset to reduce size
-    ds_raw = ds_raw.select(range(0, len(ds_raw), 3))
+    ds_raw = ds_raw.select(range(0, len(ds_raw), 2))
 
     # Build tokenizers
     tokenizer_src = get_tokenizer(config, ds_raw, config["lang_src"])
@@ -175,7 +175,7 @@ def train_model(config):
     initial_epoch = 0
     global_step = 0
     if config['preload'] is not None:
-        model_filename = get_weigths_file_path(config, config['preload'])
+        model_filename = get_weights_file_path(config, config['preload'])
         print(f"Loading model from {model_filename}")
         state = torch.load(model_filename)
         optimizer.load_state_dict(state['optimizer_state_dict'])
@@ -184,9 +184,9 @@ def train_model(config):
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_tgt.token_to_id("[PAD]"), label_smoothing=0.1).to(device)
 
     for epoch in range(initial_epoch, config['num_epochs']):
+        model.train()
         batch_iterator = tqdm(train_dataloader, desc=f'Epoch {epoch + 1}/{config["num_epochs"]}', unit='batch')
         for batch in batch_iterator:
-            model.train()
             encoder_input = batch['encoder_input'].to(device) # (B, Seq_len)
             decoder_input = batch['decoder_input'].to(device) # (B, Seq_len)
             encoder_mask = batch['encoder_mask'].to(device) # (B, 1, 1, Seq_len)
@@ -217,19 +217,19 @@ def train_model(config):
 
             global_step += 1
         
-        run_validation(
-            model,
-            val_dataloader,
-            tokenizer_src,
-            tokenizer_tgt,
-            config['seq_len'],
-            device,
-            print_msg=lambda msg: batch_iterator.write(msg),
-            global_state=global_step,
-            writer=writer
-        )
+            run_validation(
+                model,
+                val_dataloader,
+                tokenizer_src,
+                tokenizer_tgt,
+                config['seq_len'],
+                device,
+                print_msg=lambda msg: batch_iterator.write(msg),
+                global_state=global_step,
+                writer=writer
+            )
 
-        model_filename = get_weigths_file_path(config, f"{epoch:02d}")
+        model_filename = get_weights_file_path(config, f"{epoch:02d}")
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
