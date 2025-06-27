@@ -3,3 +3,7 @@ __pycache__/
 **weights/
 
 **/tokenizer_0.json
+llama-2-7b/
+tokenizer*
+LICENSE
+USE_POLICY.md
