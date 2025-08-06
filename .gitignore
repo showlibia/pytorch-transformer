@@ -13,3 +13,5 @@ chinese-macbert-base/
 models_*
 *.arrow
 *.lock
+.hfd
+evaluate
